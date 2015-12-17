@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en" ng-app="TweetGlobe">
+  <head>
+    <meta charset="utf-8">
+    <title>Sentinel: Sentiments of the Globe</title>
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Sentinel: Sentiments of the Globe" />
+    <meta property="og:image" content="https://raw.githubusercontent.com/twitterdev/twitter-stream-globe/master/screenshot.png" />
+    <meta property="og:description" content="A real-time 3D visualization of Tweets from around the world on a subject." />
+    <meta property="og:url" content="http://twitter-stream-globe.herokuapp.com" />
+    <meta property="og:site_name" content="The Pulse of the Planet" />
+<style>
+	.animate-enter, 
+.animate-leave { 
+    -webkit-transition: 400ms cubic-bezier(0.250, 0.250, 0.750, 0.750) all;
+    -moz-transition: 400ms cubic-bezier(0.250, 0.250, 0.750, 0.750) all;
+    -ms-transition: 400ms cubic-bezier(0.250, 0.250, 0.750, 0.750) all;
+    -o-transition: 400ms cubic-bezier(0.250, 0.250, 0.750, 0.750) all;
+    transition: 400ms cubic-bezier(0.250, 0.250, 0.750, 0.750) all;
+    position: relative;
+    display: block;
+} 
+
+.animate-leave.animate-leave-active,
+.animate-enter {
+    -webkit-transform: skewX(45deg) skewY(30deg);
+    -moz-transform: skewX(45deg) skewY(30deg);
+    -ms-transform: skewX(45deg) skewY(30deg);
+    -o-transform: skewX(45deg) skewY(30deg);
+    transform: skewX(45deg) skewY(30deg);
+    opacity: 0;
+    height: 0px;
+}        
+
+.animate-enter.animate-enter-active,
+.animate-leave {
+    -webkit-transform: skewX(0deg) skewY(0deg);
+    -moz-transform: skewX(0deg) skewY(0deg);
+    -ms-transform: skewX(0deg) skewY(0deg);
+    -o-transform: skewX(0deg) skewY(0deg);
+    transform: skewX(0deg) skewY(0deg);
+    opacity: 1;
+    height: 30px;
+}
+</style>
+    <link href='//fonts.googleapis.com/css?family=Lato:300,400,700|Share+Tech+Mono' rel='stylesheet' type='text/css'>
+    <link rel='stylesheet' href='//cdnjs.cloudflare.com/ajax/libs/c3/0.1.29/c3.css' />
+    <link rel='stylesheet' href='/stylesheets/style.css' />
+	<link rel='stylesheet' href='/stylesheets/animation.css' />
+    <link rel='shortcut icon' href='/images/Twitter_logo_blue_small.png' />
+	<link href="//netdna.bootstrapcdn.com/twitter-bootstrap/2.3.1/css/bootstrap-combined.min.css" rel="stylesheet">
+	<link rel="stylesheet" href="/stylesheets/animate.css" />
+
+    <script src="//platform.twitter.com/widgets.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/pubnub/3.6.3/pubnub.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/three.js/r68/three.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/stats.js/r11/Stats.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/gsap/latest/TweenMax.min.js"/></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/angular.js/1.2.18/angular.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/angular.js/1.2.18/angular-resource.min.js"></script>
+    <script src="/vendor/pubnub-angular/lib/pubnub-angular.js"></script>
+    <script src="//js.leapmotion.com/leap-0.6.3.min.js"></script>
+    <script src="//js.leapmotion.com/leap-plugins-0.1.9.js"></script>
+	<script src="https://code.jquery.com/jquery-2.1.4.js"></script>
+	<script src="/javascripts/chart/Chart.js"></script>
+	 
+    <script>
+      // PubNub config rendered server side so that config is in one place
+      var pubnubConfig = {
+        subscribe_key: '<%= subscribe_key %>',
+        channel: '<%= channel %>'
+      }
+    </script>
+  </head>
+  <body>
+
+  <div id="intro" style=" animation-delay:2s;width: 100%;height: 100%; z-index:10;align:center;background:black;position:fixed;" class="rotateOut animated">
+	<div><img src="/images/sentinel_nova.png" style="display: block;margin-left: auto;margin-right: auto"/></div>
+	<div><img src="/images/DigitalBrain.jpg" style="display: block;margin-left: auto;margin-right: auto"/></div>
+  </div>
+  
+    <!-- Container for the Three.js scene -->
+    <div id="globe-holder"></div>
+
+    <!-- Container for the Angular application -->
+    <div id="tweet-hud" ng-controller="TweetHud">
+
+      <div id="header">
+        <h1>Sentinel: <small>Sentiments of the Globe</small></h1>
+        <span id="twitter-dev">Analyzing 'Trump'</span>
+      </div>
+
+      <div id="left-panel" class="hud-panel">
+        <div>
+
+          <!-- Repeats for every Tweet in the $scope.tweets model -->
+          <div ng-animate="'animate'"  ng-repeat="tweet in tweets" class="tweet-item {{tweet.sentiment.state}}">
+            <img ng-src="{{tweet.user.profile_image_url}}" />
+			<span class="text"><a href="{{tweet.user.profile_image_url}}" target="_blank"><strong>@{{tweet.user.screen_name}}<strong></a></span>
+			<div class="slideInLeft">
+				<div style="width:100%">
+						<span class="text">{{tweet.text}}</a></span>
+				</div>
+				<div style="width:100%">
+						<span class="text">{{tweet.place.name}},{{tweet.place.country}}</a></span>
+				</div>
+			</div>
+          </div>
+
+        </div>
+      </div>
+
+      <div id="right-panel" class="hud-panel">
+        <div id="sentiment-panel" class="sub-panel">
+          <h4>Tweet Sentiment</h4>
+
+          <!-- Bind to $scope.avgSentiment model -->
+          <span id="sentiment-value" class="{{sentimentState}}">{{avgSentiment}}</span>
+
+        </div>
+
+        <div id="trends-panel" class="sub-panel">
+          <h4>Sentiments @</h4>
+		  <div id="result"></div>
+		  <div class="input-group" ng-controller="MyCtrl">
+			  <input type="text" class="form-control" ng-model="zip" placeholder="Search in Zip" id="zipinput" />
+			  <span class="input-group-btn">
+				<button class="btn btn-default" ng-click="myName(zip)" type="button">Go!</button>
+			  </span>
+		  </div>
+		  <h6>Tracking Since: Dec 18, 2015</h6>
+		  
+          <div id="myChart-div">
+			<canvas id="myChart" width="210" height="300"></canvas>
+		  <div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <script src="/javascripts/shaders.js"></script>
+    <script src="/javascripts/TweetBeacon.js"></script>
+    <script src="/javascripts/LeapController.js"></script>
+    <script src="/javascripts/TwitterStreamGlobe.js"></script>
+    <script src="/javascripts/TweetHud.js"></script>
+	
+	<script>
+	
+	    //hide the intro
+		setTimeout(function(){
+			 $('#intro').remove();
+			 $('#zipinput').val('61701');
+		},4000);
+		
+		
+		function MyCtrl($scope) {
+			$scope.myName = function(zip) {
+				console.log('Hello ' + zip);
+				 // Call mongodb here
+				 
+				var ctx = $("#myChart").get(0).getContext("2d");
+		
+				var pieData;
+				console.log (" cached data:: " + localStorage.getItem(zip));
+				
+				if (localStorage.getItem(zip) == null) {
+				    console.log("First time :: " + zip);
+					
+					var positive = Math.floor((Math.random() * 50) + 1);
+					var negative = Math.floor((Math.random() * 50) + 1);
+					var neutral = 100 - positive - negative;
+					
+					pieData = [
+							{
+								value: positive,
+								color:"#00FF00"
+							},
+							{
+								value : negative,
+								color : "#FF0000"
+							},
+							{
+								value : neutral,
+								color : "#222222"
+							}
+						];
+									
+
+				    console.log(JSON.stringify(pieData));
+					// Store
+					localStorage.setItem(zip, JSON.stringify(pieData));
+
+					
+				} else {
+				   console.log("getting from cache " + zip);
+				   
+				// Retrieve
+					pieData = JSON.parse(localStorage.getItem(zip));
+				
+				}
+
+				
+				// pie chart options
+				var pieOptions = {
+					 segmentShowStroke : false,
+					 animateScale : true
+				}
+				
+				new Chart(ctx).Pie(pieData, pieOptions);
+			}
+		}
+		
+	</script>
+  </body>
+</html>
